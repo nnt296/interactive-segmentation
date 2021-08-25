@@ -174,13 +174,17 @@ class Window(QMainWindow):
 
     def open_image(self):
         self.im_path, _ = QFileDialog.getOpenFileName()
-        self.cv_background = cv2.imread(self.im_path)
+        self.reset()
+
         self.width = self.cv_background.shape[1]
         self.height = self.cv_background.shape[0]
-        self.pixel_map = QPixmap(self.im_path)
+
+        # Update window, drawing layer (self.image) by size of the new image
         self.setGeometry(self.top, self.left, self.width, self.height)
         self.image = QImage(self.size(), QImage.Format_ARGB32)
         self.image.fill(Qt.transparent)
+
+        self.reset()
         self.update()
 
     def save(self):
@@ -204,6 +208,7 @@ class Window(QMainWindow):
 
     def reset(self):
         self.clear()
+        self.cv_background = cv2.imread(self.im_path)
         self.start_rect_pos = None
         self.end_rect_pos = None
         self.gc = GrabCutProcessor()

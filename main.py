@@ -114,7 +114,7 @@ class Window(QMainWindow):
         self.reset()
 
     def process_image(self):
-        src_im = self.processed_im
+        src_im = self.cv_background
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
 

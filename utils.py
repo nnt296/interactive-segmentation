@@ -91,7 +91,7 @@ def get_max_contour_rect(mask):
     return rect
 
 
-def resize_max(cv_im, max_size=800):
+def resize_max(cv_im, max_size=1080):
     """
     Args:
         cv_im: H x W x C cv image (not gray)

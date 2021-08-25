@@ -7,11 +7,11 @@ from PyQt5.QtCore import Qt, QPoint, QRect
 import sys
 
 from qc_processor import GrabCutProcessor
-from utils import convert_to_cv, convert_to_mask, convert_cv_to_q_image, get_max_contour_rect
+from utils import convert_to_cv, convert_to_mask, convert_cv_to_q_image, get_max_contour_rect, resize_max
 
 
 class Window(QMainWindow):
-    def __init__(self, im_path="/mnt/CVProjects/QtApp/background.jpg"):
+    def __init__(self, im_path="/mnt/CVProjects/QtApp/images/background2.jpg"):
         super().__init__()
         self.icon = "icon.jpeg"
         self.setWindowTitle("Drawing")
@@ -19,6 +19,7 @@ class Window(QMainWindow):
 
         self.im_path = im_path
         self.cv_background = cv2.imread(self.im_path)
+        self.cv_background = resize_max(self.cv_background)
 
         self.top = 400
         self.left = 400
@@ -27,11 +28,13 @@ class Window(QMainWindow):
 
         self.setGeometry(self.top, self.left, self.width, self.height)
 
-        # ARGB32 for transparent image
+        # ARGB32 for transparent images
         self.image = QImage(self.size(), QImage.Format_ARGB32)
         self.image.fill(Qt.transparent)
 
         self.pixel_map = QPixmap(self.im_path)
+        self.other_pixmap = QPixmap(self.pixel_map.size())
+        self.other_pixmap.fill(Qt.transparent)
 
         self.drawing = False
         self.brushSize = 3
@@ -117,15 +120,17 @@ class Window(QMainWindow):
             cv_red_green = convert_to_cv(self.image)
             cv_rect_mask = convert_to_mask(cv_red_green)
             rect = get_max_contour_rect(cv_rect_mask)
-            processed = self.gc.gc_process_rect(image=src_im, rect=rect)
+            processed, output_mask = self.gc.gc_process_rect(image=src_im, rect=rect)
         else:
             cv_red_green = convert_to_cv(self.image)
             gray_mask = convert_to_mask(cv_red_green)
-            processed = self.gc.gc_process(image=src_im, support_mask=gray_mask)
+            processed, output_mask = self.gc.gc_process(image=src_im, support_mask=gray_mask)
 
         self.processed_im = processed
-        self.pixel_map = QPixmap(convert_cv_to_q_image(self.processed_im))
-        self.update()
+        # self.pixel_map = QPixmap(convert_cv_to_q_image(self.processed_im))
+
+        self.make_transparent_mask_q_pixel(output_mask)
+        self.clear()  # Update() is called within clear()
 
         # Work on pop up instead
         # p_w = processed.shape[1]
@@ -146,7 +151,7 @@ class Window(QMainWindow):
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         if (event.buttons() & Qt.LeftButton) & self.drawing:
-            # Create a painter on top of transparent image
+            # Create a painter on top of transparent images
             painter = QPainter(self.image)
             painter.setPen(QPen(self.brushColor, self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
 
@@ -166,11 +171,23 @@ class Window(QMainWindow):
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
         # This function is used to set background = pix-map
-        # and set an additional layer as transparent image for drawing
+        # and set an additional layer as transparent images for drawing
         canvas_painter = QPainter(self)
-        # canvas_painter.drawImage(self.rect(), self.image, self.image.rect())
+        # canvas_painter.drawImage(self.rect(), self.images, self.images.rect())
         canvas_painter.drawPixmap(self.rect(), self.pixel_map, self.pixel_map.rect())
+
+        # self.other_pixmap = QPixmap("mask.png")
+        canvas_painter.setOpacity(0.3)
+        canvas_painter.drawPixmap(self.rect(), self.other_pixmap, self.other_pixmap.rect())
+
+        canvas_painter.setOpacity(1.0)
         canvas_painter.drawImage(self.rect(), self.image, self.image.rect())
+        canvas_painter.end()
+
+    def make_transparent_mask_q_pixel(self, cv_mask):
+        rgb = cv2.cvtColor(cv_mask, cv2.COLOR_GRAY2RGB)
+        q_image = convert_cv_to_q_image(rgb)
+        self.other_pixmap = QPixmap(q_image)
 
     def open_image(self):
         self.im_path, _ = QFileDialog.getOpenFileName()
@@ -179,7 +196,7 @@ class Window(QMainWindow):
         self.width = self.cv_background.shape[1]
         self.height = self.cv_background.shape[0]
 
-        # Update window, drawing layer (self.image) by size of the new image
+        # Update window, drawing layer (self.images) by size of the new images
         self.setGeometry(self.top, self.left, self.width, self.height)
         self.image = QImage(self.size(), QImage.Format_ARGB32)
         self.image.fill(Qt.transparent)
@@ -197,22 +214,25 @@ class Window(QMainWindow):
         # We drawn on image, hence, save the image
         # Convert format before saving
 
-        self.pixel_map.save(file_path)
+        # self.pixel_map.save(file_path)
 
-        # tobe_save = self.image.copy()
+        # tobe_save = self.images.copy()
         # tobe_save = tobe_save.convertToFormat(QImage.Format_RGB32)
         # tobe_save.save(file_path)
 
-        # self.image.save(file_path)
+        # self.images.save(file_path)
         # self.pixel_map.save(file_path)
+        cv2.imwrite(file_path, self.processed_im)
 
     def reset(self):
         self.clear()
         self.cv_background = cv2.imread(self.im_path)
+        self.cv_background = resize_max(self.cv_background)
         self.start_rect_pos = None
         self.end_rect_pos = None
         self.gc = GrabCutProcessor()
         self.pixel_map = QPixmap(self.im_path)
+        self.other_pixmap.fill(Qt.transparent)
         self.processed_im = self.cv_background
         self.update()
 

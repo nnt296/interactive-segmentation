@@ -37,7 +37,7 @@ def convert_cv_to_q_image(cv_im):
 
 
 def convert_to_mask(red_green_src):
-    # Input BGR image containing red or green color
+    # Input BGR images containing red or green color
     lower_red = np.array([0, 0, 50])
     upper_red = np.array([0, 0, 255])
     mask_red = cv2.inRange(red_green_src, lower_red, upper_red)
@@ -90,6 +90,25 @@ def get_max_contour_rect(mask):
     rect = cv2.boundingRect(contours[max_idx])
 
     return rect
+
+
+def resize_max(cv_im, max_size=800):
+    """
+    Args:
+        cv_im: H x W x C cv image (not gray)
+        max_size: expect maximum size
+    Returns:
+        resized_im
+    """
+    h, w, _ = cv_im.shape
+    max_s = max(h, w)
+    # Skip if smaller than max_size
+    if max_size > max_s:
+        return cv_im
+
+    scale = max_size / max_s
+    resized_im = cv2.resize(cv_im, None, fx=scale, fy=scale)
+    return resized_im
 
 
 if __name__ == '__main__':

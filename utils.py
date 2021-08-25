@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-from PIL import Image
 from PyQt5.QtGui import QImage
 
 
@@ -109,12 +108,3 @@ def resize_max(cv_im, max_size=800):
     scale = max_size / max_s
     resized_im = cv2.resize(cv_im, None, fx=scale, fy=scale)
     return resized_im
-
-
-if __name__ == '__main__':
-    x = cv2.imread("/mnt/CVProjects/QtApp/x.png")
-
-    m = convert_to_mask(x)
-
-    image = Image.fromarray(m)
-    image.show()

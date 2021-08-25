@@ -116,6 +116,8 @@ class Window(QMainWindow):
     def process_image(self):
         src_im = self.processed_im
 
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
         if self.rect_mode:
             cv_red_green = convert_to_cv(self.image)
             cv_rect_mask = convert_to_mask(cv_red_green)
@@ -125,6 +127,12 @@ class Window(QMainWindow):
             cv_red_green = convert_to_cv(self.image)
             gray_mask = convert_to_mask(cv_red_green)
             processed, output_mask = self.gc.gc_process(image=src_im, support_mask=gray_mask)
+
+        QApplication.restoreOverrideCursor()
+
+        # Case error skip
+        if processed is None:
+            return
 
         self.processed_im = processed
         # self.pixel_map = QPixmap(convert_cv_to_q_image(self.processed_im))
@@ -193,17 +201,6 @@ class Window(QMainWindow):
         self.im_path, _ = QFileDialog.getOpenFileName()
         self.reset()
 
-        self.width = self.cv_background.shape[1]
-        self.height = self.cv_background.shape[0]
-
-        # Update window, drawing layer (self.images) by size of the new images
-        self.setGeometry(self.top, self.left, self.width, self.height)
-        self.image = QImage(self.size(), QImage.Format_ARGB32)
-        self.image.fill(Qt.transparent)
-
-        self.reset()
-        self.update()
-
     def save(self):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save Image", "",
                                                    "PNG(*.png);;JPEG(*.jpg *.jpeg);; ALL Files(*.*)")
@@ -230,6 +227,15 @@ class Window(QMainWindow):
         self.cv_background = resize_max(self.cv_background)
         self.start_rect_pos = None
         self.end_rect_pos = None
+
+        self.width = self.cv_background.shape[1]
+        self.height = self.cv_background.shape[0]
+
+        # Update window, drawing layer (self.images) by size of the new images
+        self.setGeometry(self.top, self.left, self.width, self.height)
+        self.image = QImage(self.size(), QImage.Format_ARGB32)
+        self.image.fill(Qt.transparent)
+
         self.gc = GrabCutProcessor()
         self.pixel_map = QPixmap(self.im_path)
         self.other_pixmap.fill(Qt.transparent)

@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QAction, QFileDialog, QWidget
 from PyQt5.QtGui import QIcon, QImage, QPainter, QPen, QPixmap
@@ -6,6 +7,7 @@ from PyQt5.QtCore import Qt, QPoint, QRect
 
 import sys
 
+from is_process import DLSegmentProcessor
 from qc_processor import GrabCutProcessor
 from utils import convert_to_cv, convert_to_mask, convert_cv_to_q_image, get_max_contour_rect, resize_max
 
@@ -21,8 +23,8 @@ class Window(QMainWindow):
         self.cv_background = cv2.imread(self.im_path)
         self.cv_background = resize_max(self.cv_background)
 
-        self.top = 400
-        self.left = 400
+        self.top = 200
+        self.left = 200
         self.width = self.cv_background.shape[1]
         self.height = self.cv_background.shape[0]
 
@@ -48,6 +50,7 @@ class Window(QMainWindow):
         brush_color = main_menu.addMenu("Brush Color")
         process_image = main_menu.addMenu("Process Image")
         drawing_mode = main_menu.addMenu("Drawing Mode")
+        segment_algo = main_menu.addMenu("Segment Algo")
 
         open_action = QAction(QIcon("icon.jpeg"), "Open", self)
         open_action.setShortcut("Ctrl+O")
@@ -104,16 +107,32 @@ class Window(QMainWindow):
         drawing_mode.addAction(point_action)
         point_action.triggered.connect(self.draw_point_mode)
 
-        self.pop_up_w = None
+        dl_action = QAction(QIcon("icon.jpeg"), "DL mode", self)
+        segment_algo.addAction(dl_action)
+        dl_action.triggered.connect(self.dl_mode)
 
-        self.rect_mode = True
+        gc_action = QAction(QIcon("icon.jpeg"), "GC mode", self)
+        segment_algo.addAction(gc_action)
+        gc_action.triggered.connect(self.gc_mode)
+
+        self.pop_up_w = None
+        self.mode_dl_is = True  # switch between dl and gc
+        self.rect_mode = True  # switch between rect and point mode for GC algorithm
+        # Store position for processing rectangle
         self.start_rect_pos = None
         self.end_rect_pos = None
+
+        # Algorithm objects
         self.gc = None
-        self.processed_im = None
+        self.dl_processor = None
+
+        self.processed_im = None  # Store processed image (raw & mask)
         self.reset()
 
     def process_image(self):
+        if self.mode_dl_is:
+            return
+
         src_im = self.cv_background
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -149,13 +168,39 @@ class Window(QMainWindow):
         # self.pop_up_w.setGeometry(100, 100, p_w, p_h)
         # self.pop_up_w.show()
 
-    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
-        if event.button() == Qt.LeftButton:
-            self.drawing = True
-            self.lastPoint = event.pos()
+    def dl_process_image(self, event: QtGui.QMouseEvent) -> None:
+        if self.dl_processor is None:
+            return
+        painter = QPainter(self.image)
 
-            if self.rect_mode:
-                self.start_rect_pos = event.pos()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        if event.button() == Qt.LeftButton:
+            painter.setPen(QPen(Qt.green, self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            painter.drawEllipse(event.pos(), self.brushSize / 2, self.brushSize / 2)
+            output_mask = self.dl_processor.process(event.pos().y(), event.pos().x(), True)
+        elif event.button() == Qt.RightButton:
+            painter.setPen(QPen(Qt.red, self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            painter.drawEllipse(event.pos(), self.brushSize / 2, self.brushSize / 2)
+            output_mask = self.dl_processor.process(event.pos().y(), event.pos().x(), False)
+        else:
+            return
+
+        QApplication.restoreOverrideCursor()
+
+        self.processed_im = cv2.bitwise_and(self.cv_background, self.cv_background, mask=output_mask)
+        self.make_transparent_mask_q_pixel(output_mask)
+        self.update()
+
+    def mousePressEvent(self, event: QtGui.QMouseEvent) -> None:
+        if not self.mode_dl_is:
+            if event.button() == Qt.LeftButton:
+                self.drawing = True
+                self.lastPoint = event.pos()
+
+                if self.rect_mode:
+                    self.start_rect_pos = event.pos()
+        else:
+            self.dl_process_image(event)
 
     def mouseMoveEvent(self, event: QtGui.QMouseEvent) -> None:
         if (event.buttons() & Qt.LeftButton) & self.drawing:
@@ -240,6 +285,9 @@ class Window(QMainWindow):
         self.pixel_map = QPixmap(self.im_path)
         self.other_pixmap.fill(Qt.transparent)
         self.processed_im = self.cv_background
+
+        self.dl_processor = DLSegmentProcessor()
+        self.dl_processor.set_image(self.cv_background)
         self.update()
 
     def clear(self):
@@ -263,6 +311,12 @@ class Window(QMainWindow):
 
     def draw_point_mode(self):
         self.rect_mode = False
+
+    def dl_mode(self):
+        self.mode_dl_is = True
+
+    def gc_mode(self):
+        self.mode_dl_is = False
 
 
 class MyPopup(QWidget):
